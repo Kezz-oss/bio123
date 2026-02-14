@@ -1,71 +1,389 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Kezz - Beginner Designer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Correct Mozilla Headline from Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Mozilla+Headline:wght@400&display=swap" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Mozilla Headline', Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-    .container {
-      text-align: center;
-      margin-top: 10vh;
-    }
-    .kezz-title {
-      font-family: 'Mozilla Headline', Arial, sans-serif;
-      font-size: 4rem;
-      font-weight: 400;
-      margin: 0 0 0.5rem 0;
-    }
-    .subtitle {
-      font-size: 1.2rem;
-      margin-bottom: 2.5rem;
-    }
-    .intro {
-      font-size: 1rem;
-      margin-bottom: 2rem;
-    }
-    .contact {
-      font-size: 1rem;
-    }
-    @media (max-width: 600px) {
-      .kezz-title {
-        font-size: 2.3rem;
-      }
-      .subtitle {
-        font-size: 1rem;
-        margin-bottom: 1.5rem;
-      }
-      .intro, .contact {
-        font-size: 0.95rem;
-      }
-      .container {
-        margin-top: 5vh;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project: Sovereignty | Grand Strategy Sim</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Inter', sans-serif; color: white; }
+        canvas { display: block; }
+        .ui-panel { background: rgba(10, 10, 15, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .scrollbar::-webkit-scrollbar { width: 4px; }
+        .scrollbar::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+        .law-btn { transition: all 0.2s; border-left: 3px solid transparent; }
+        .law-btn.active { border-left-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        #error-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+    </style>
 </head>
 <body>
-  <main class="container">
-    <h1 class="kezz-title">Kezz</h1>
-    <div class="subtitle">Begginer Designer</div>
-    <div class="intro">
-      Hey, I am Kezz. I am interested in design and games
+
+    <div id="error-overlay">
+        <h2 class="text-2xl font-bold text-red-500 mb-2">Graphics Initialization Failed</h2>
+        <p class="text-gray-400 max-w-md">This application requires WebGL support. Please ensure your browser has hardware acceleration enabled or try a different browser.</p>
     </div>
-    <div class="contact">
-      <div>Contact me through</div>
-      <div>kezz.contact@proton.me</div>
+
+    <!-- HUD -->
+    <div id="hud" class="fixed top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none z-10">
+        <div class="ui-panel p-4 rounded-lg pointer-events-auto">
+            <h1 class="text-xl font-black tracking-tighter text-blue-400">PROJECT: SOVEREIGNTY</h1>
+            <div class="text-xs text-gray-400 mt-1" id="date-display">1 JANUARY 2024</div>
+            <div class="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                    <div class="text-[10px] uppercase text-gray-500">Global Inflation</div>
+                    <div id="inflation-display" class="font-mono text-red-400">2.00%</div>
+                </div>
+                <div>
+                    <div class="text-[10px] uppercase text-gray-500">EU Integrity</div>
+                    <div id="eu-integrity-display" class="font-mono text-green-400">85%</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="country-stats" class="ui-panel p-4 rounded-lg pointer-events-auto hidden w-64">
+            <h2 id="selected-country-name" class="text-lg font-bold border-b border-white/10 pb-2">HUNGARY</h2>
+            <div class="mt-3 space-y-2 text-sm">
+                <div class="flex justify-between"><span>Leader:</span> <span id="leader-name" class="text-blue-300">---</span></div>
+                <div class="flex justify-between"><span>Ideology:</span> <span id="ideology-label" class="text-purple-400">---</span></div>
+                <div class="flex justify-between"><span>Wealth:</span> <span id="wealth-display" class="text-yellow-400">€0</span></div>
+                <div class="h-1 w-full bg-gray-800 rounded-full mt-4"><div id="unrest-bar" class="h-full bg-red-500 rounded-full" style="width: 0%"></div></div>
+                <div class="text-[10px] text-center text-gray-500 uppercase">Social Unrest</div>
+            </div>
+        </div>
     </div>
-  </main>
+
+    <!-- MAIN UI TABS -->
+    <div id="great-seal" class="fixed bottom-0 left-1/2 -translate-x-1/2 w-[90%] max-w-5xl h-64 ui-panel rounded-t-2xl p-4 hidden pointer-events-auto z-20">
+        <div class="flex h-full gap-6">
+            <div class="w-48 flex flex-col gap-2 border-r border-white/10 pr-4">
+                <button onclick="switchTab('laws')" class="text-left p-2 rounded hover:bg-white/5 text-sm">THE GREAT SEAL</button>
+                <button onclick="switchTab('economy')" class="text-left p-2 rounded hover:bg-white/5 text-sm">INDUSTRIAL TIER</button>
+                <button onclick="switchTab('social')" class="text-left p-2 rounded hover:bg-white/5 text-sm">SOCIAL CLASSES</button>
+                <div class="mt-auto">
+                    <button id="exit-btn" class="w-full py-2 bg-red-900/40 border border-red-500 text-red-500 text-xs font-bold rounded hover:bg-red-500 hover:text-white transition-colors">INITIATE EXIT</button>
+                </div>
+            </div>
+            <div id="tab-content" class="flex-1 scrollbar overflow-y-auto pr-2"></div>
+        </div>
+    </div>
+
+    <!-- LOADING SCREEN -->
+    <div id="loader" class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
+        <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div class="text-blue-400 font-mono tracking-widest text-sm uppercase animate-pulse">Initializing European Simulation...</div>
+    </div>
+
+    <script>
+        const LOCALES = {
+            "Hungary": {
+                first: ["Attila", "Zoltán", "Gábor", "László", "János", "Béla", "András", "Sándor", "Miklós", "Ferenc", "István", "Viktor"],
+                last: ["Kovács", "Nagy", "Szabó", "Kiss", "Farkas", "Molnár", "Varga", "Tóth", "Horváth", "Mészáros", "Simon"]
+            },
+            "Poland": {
+                first: ["Mateusz", "Andrzej", "Piotr", "Krzysztof", "Tomasz", "Jan", "Michał", "Paweł", "Jakub", "Marek"],
+                last: ["Nowak", "Kowalski", "Wiśniewski", "Wójcik", "Kowalczyk", "Kamiński", "Lewandowski", "Zieliński"]
+            },
+            "Germany": {
+                first: ["Hans", "Klaus", "Jürgen", "Stefan", "Wolfgang", "Dieter", "Helmut", "Andreas", "Uwe", "Christian"],
+                last: ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Schulz"]
+            },
+            "France": {
+                first: ["Jean", "Pierre", "Michel", "Philippe", "Alain", "Nicolas", "Christophe", "Benoît", "Guillaume"],
+                last: ["Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau"]
+            }
+        };
+
+        const IDEOLOGIES = {
+            "Communist": { prod: 1.25, worker: 0.3, elite: -0.4, color: "#ef4444" },
+            "Technocracy": { research: 1.4, intellectual: 0.2, worker: -0.1, color: "#3b82f6" },
+            "Capitalism": { wealth: 1.3, elite: 0.2, intellectual: 0.1, color: "#eab308" },
+            "Nationalist": { security: 1.5, eu: -0.5, tradition: 0.4, color: "#f97316" }
+        };
+
+        const MIGRATION_LAWS = [
+            { name: "Open Borders", eu: 30, sec: -30, eco: 20 },
+            { name: "Regulated Borders", eu: 15, sec: -5, eco: 10 },
+            { name: "Open Visa", eu: 5, sec: 0, eco: 5 },
+            { name: "Closed Borders", eu: -20, sec: 15, eco: -5 },
+            { name: "EU-Only", eu: 40, sec: 10, eco: 0 },
+            { name: "Native Only", eu: -60, sec: 30, eco: -15 },
+            { name: "Absolute Anti-Immigration", eu: -100, sec: 50, eco: -30 }
+        ];
+
+        class Director {
+            constructor() {
+                this.day = 1;
+                this.month = 0;
+                this.year = 2024;
+                this.globalInflation = 0.02;
+                this.euIntegrity = 85;
+                this.months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+                this.selectedCountry = null;
+                this.countries = [];
+                this.lastTick = 0;
+            }
+
+            tick() {
+                this.day++;
+                if (this.day > 30) {
+                    this.day = 1;
+                    this.month++;
+                    this.updateEconomics();
+                }
+                if (this.month > 11) {
+                    this.month = 0;
+                    this.year++;
+                }
+                this.updateUI();
+            }
+
+            updateEconomics() {
+                let totalProd = this.countries.reduce((acc, c) => acc + c.economy.wealthProd, 0);
+                this.globalInflation += (totalProd / 10000000) * 0.001;
+                this.countries.forEach(c => c.processMonth());
+            }
+
+            updateUI() {
+                const dateEl = document.getElementById('date-display');
+                if (dateEl) dateEl.innerText = `${this.day} ${this.months[this.month]} ${this.year}`;
+                
+                const infEl = document.getElementById('inflation-display');
+                if (infEl) infEl.innerText = `${(this.globalInflation * 100).toFixed(2)}%`;
+                
+                const euEl = document.getElementById('eu-integrity-display');
+                if (euEl) euEl.innerText = `${this.euIntegrity}%`;
+                
+                if (this.selectedCountry) {
+                    const wEl = document.getElementById('wealth-display');
+                    if (wEl) wEl.innerText = `€${Math.floor(this.selectedCountry.economy.wealth).toLocaleString()}`;
+                    
+                    const uEl = document.getElementById('unrest-bar');
+                    if (uEl) uEl.style.width = `${this.selectedCountry.social.unrest}%`;
+                }
+            }
+        }
+
+        class Country {
+            constructor(name, mesh) {
+                this.name = name;
+                this.mesh = mesh;
+                this.leader = this.generateLeader();
+                this.ideology = Object.keys(IDEOLOGIES)[Math.floor(Math.random() * 4)];
+                this.social = { worker: 50, intellectual: 50, elite: 50, unrest: 0 };
+                this.economy = { 
+                    wealth: 1000000, 
+                    wealthProd: 100,
+                    factories: { raw: 1, industrial: 0, strategic: 0 }
+                };
+                this.laws = { migration: 1 };
+            }
+
+            generateLeader() {
+                const loc = LOCALES[this.name] || LOCALES["Germany"];
+                const f = loc.first[Math.floor(Math.random() * loc.first.length)];
+                const l = loc.last[Math.floor(Math.random() * loc.last.length)];
+                return `${f} ${l}`;
+            }
+
+            processMonth() {
+                const idl = IDEOLOGIES[this.ideology];
+                let income = (this.economy.factories.raw * 50) + (this.economy.factories.industrial * 200);
+                income *= (idl.prod || 1);
+                this.economy.wealth += income;
+                this.economy.wealthProd = income;
+
+                if (director.globalInflation > 0.05) {
+                    this.social.unrest += (director.globalInflation - 0.05) * 50;
+                }
+                this.social.unrest = Math.max(0, Math.min(100, this.social.unrest));
+            }
+        }
+
+        let scene, camera, renderer, raycaster, mouse;
+        const director = new Director();
+
+        function init3D() {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            
+            if (!gl) {
+                document.getElementById('error-overlay').style.display = 'flex';
+                document.getElementById('loader').style.display = 'none';
+                return;
+            }
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x050505);
+            document.body.appendChild(renderer.domElement);
+
+            const light = new THREE.DirectionalLight(0xffffff, 1.2);
+            light.position.set(5, 10, 5);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x606060));
+
+            const countriesData = [
+                { name: "Hungary", pos: [-1, 0, 0], color: 0x228b22 },
+                { name: "Poland", pos: [0, 1.2, 0], color: 0xdc143c },
+                { name: "Germany", pos: [-1.2, 1.2, 0], color: 0xffd700 },
+                { name: "France", pos: [-3, 0.5, 0], color: 0x4169e1 }
+            ];
+
+            countriesData.forEach(data => {
+                const geo = new THREE.BoxGeometry(1.4, 1.4, 0.2);
+                const mat = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.7 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(...data.pos);
+                mesh.userData = { countryName: data.name };
+                scene.add(mesh);
+                
+                director.countries.push(new Country(data.name, mesh));
+            });
+
+            camera.position.z = 7;
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            window.addEventListener('mousedown', onMapClick);
+            window.addEventListener('resize', onResize);
+            
+            requestAnimationFrame(animate);
+            document.getElementById('loader').style.display = 'none';
+        }
+
+        function onMapClick(event) {
+            if (event.target.tagName !== 'CANVAS') return;
+            
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children);
+
+            if (intersects.length > 0) {
+                const name = intersects[0].object.userData.countryName;
+                selectCountry(name);
+            }
+        }
+
+        function selectCountry(name) {
+            const country = director.countries.find(c => c.name === name);
+            director.selectedCountry = country;
+
+            const statsEl = document.getElementById('country-stats');
+            const sealEl = document.getElementById('great-seal');
+            
+            if (statsEl) statsEl.classList.remove('hidden');
+            if (sealEl) sealEl.classList.remove('hidden');
+            
+            document.getElementById('selected-country-name').innerText = country.name.toUpperCase();
+            document.getElementById('leader-name').innerText = country.leader;
+            
+            const idLabel = document.getElementById('ideology-label');
+            idLabel.innerText = country.ideology;
+            idLabel.style.color = IDEOLOGIES[country.ideology].color;
+            
+            switchTab('laws');
+        }
+
+        function switchTab(tab) {
+            const container = document.getElementById('tab-content');
+            if (!container) return;
+            container.innerHTML = '';
+            const c = director.selectedCountry;
+            if (!c) return;
+
+            if (tab === 'laws') {
+                container.innerHTML = `<h3 class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest">Migration Laws</h3>`;
+                MIGRATION_LAWS.forEach((law, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = `law-btn w-full text-left p-3 mb-2 rounded bg-white/5 text-sm flex justify-between items-center ${c.laws.migration === idx ? 'active' : ''}`;
+                    btn.innerHTML = `
+                        <span>${law.name}</span>
+                        <div class="flex gap-2 text-[10px]">
+                            <span class="${law.eu > 0 ? 'text-green-400': 'text-red-400'}">EU: ${law.eu > 0 ? '+':''}${law.eu}</span>
+                            <span class="${law.sec > 0 ? 'text-green-400': 'text-red-400'}">SEC: ${law.sec > 0 ? '+':''}${law.sec}</span>
+                        </div>
+                    `;
+                    btn.onclick = () => { c.laws.migration = idx; switchTab('laws'); };
+                    container.appendChild(btn);
+                });
+            } else if (tab === 'economy') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="ui-panel p-4 rounded text-center">
+                            <div class="text-xs text-gray-400">RAW TIERS</div>
+                            <div class="text-2xl font-bold">${c.economy.factories.raw}</div>
+                            <button onclick="build(0)" class="mt-2 text-[10px] bg-blue-600 px-2 py-1 rounded">BUILD (€50k)</button>
+                        </div>
+                        <div class="ui-panel p-4 rounded text-center">
+                            <div class="text-xs text-gray-400">INDUSTRIAL</div>
+                            <div class="text-2xl font-bold">${c.economy.factories.industrial}</div>
+                            <button onclick="build(1)" class="mt-2 text-[10px] bg-blue-600 px-2 py-1 rounded">BUILD (€200k)</button>
+                        </div>
+                        <div class="ui-panel p-4 rounded text-center">
+                            <div class="text-xs text-gray-400">STRATEGIC</div>
+                            <div class="text-2xl font-bold">${c.economy.factories.strategic}</div>
+                            <button onclick="build(2)" class="mt-2 text-[10px] bg-blue-600 px-2 py-1 rounded">BUILD (€1M)</button>
+                        </div>
+                    </div>
+                `;
+            } else if (tab === 'social') {
+                container.innerHTML = `
+                    <div class="space-y-6 mt-2">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span>WORKERS</span><span>${c.social.worker}%</span></div>
+                            <div class="h-1.5 w-full bg-gray-800 rounded-full"><div class="h-full bg-orange-500" style="width: ${c.social.worker}%"></div></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span>INTELLECTUALS</span><span>${c.social.intellectual}%</span></div>
+                            <div class="h-1.5 w-full bg-gray-800 rounded-full"><div class="h-full bg-blue-400" style="width: ${c.social.intellectual}%"></div></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span>ELITES</span><span>${c.social.elite}%</span></div>
+                            <div class="h-1.5 w-full bg-gray-800 rounded-full"><div class="h-full bg-yellow-500" style="width: ${c.social.elite}%"></div></div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        window.build = (tier) => {
+            const c = director.selectedCountry;
+            const costs = [50000, 200000, 1000000];
+            const keys = ["raw", "industrial", "strategic"];
+            if (c.economy.wealth >= costs[tier]) {
+                c.economy.wealth -= costs[tier];
+                c.economy.factories[keys[tier]]++;
+                switchTab('economy');
+            }
+        };
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            
+            if (time - director.lastTick > 1000) {
+                director.tick();
+                director.lastTick = time;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init3D;
+    </script>
 </body>
 </html>
